@@ -1,0 +1,22 @@
+server: # Embedded server configuration
+  port: 8082 # Exposes rates-service on port 8082
+
+spring: # Spring configuration root
+  application:
+    name: rates-service # Identifies the service in logs/metrics
+  cache:
+    type: redis # Utilizes Redis for caching exchange rates
+  data:
+    redis: # Redis connection configuration
+      host: redis # Hostname from docker-compose
+      port: 6379 # Default Redis port
+
+management: # Actuator settings for monitoring
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics # Expose Prometheus scrape endpoint
+  metrics:
+    tags:
+      application: ${spring.application.name} # Add app tag to metrics
+
