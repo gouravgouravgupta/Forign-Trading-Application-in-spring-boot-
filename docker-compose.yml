@@ -1,0 +1,143 @@
+# This docker-compose file orchestrates the full microservices stack for the foreign trading app
+# Each line includes comments to explain its purpose for clarity and maintainability
+
+version: "3.9" # Specifies the Compose file format version for features and compatibility
+
+services: # Declares individual services that compose the application stack
+  postgres: # Defines the PostgreSQL database service used by trade-service
+    image: postgres:16 # Uses the official PostgreSQL 16 image from Docker Hub
+    container_name: trading-postgres # Assigns a readable name to the container
+    environment: # Sets environment variables for the PostgreSQL server
+      POSTGRES_DB: trading # Creates a default database named 'trading'
+      POSTGRES_USER: trading # Sets the database user name to 'trading'
+      POSTGRES_PASSWORD: trading # Sets the database user password to 'trading'
+    ports: # Publishes container ports to the host for local access
+      - "5432:5432" # Maps host port 5432 to container port 5432 for PostgreSQL
+    volumes: # Mounts data volumes for persistence across container restarts
+      - pgdata:/var/lib/postgresql/data # Persists Postgres data on a named volume
+    healthcheck: # Adds a healthcheck to ensure the DB is ready before dependent services start
+      test: ["CMD-SHELL", "pg_isready -U trading -d trading"] # Uses pg_isready to check database readiness
+      interval: 10s # Runs the healthcheck every 10 seconds
+      timeout: 5s # Fails the healthcheck if it takes longer than 5 seconds
+      retries: 5 # Marks the container unhealthy after 5 consecutive failures
+
+  zookeeper: # Defines Zookeeper, required by Kafka for coordination
+    image: confluentinc/cp-zookeeper:7.5.0 # Uses Confluent Platform Zookeeper image version 7.5.0
+    container_name: trading-zookeeper # Assigns a readable container name
+    environment: # Environment variables configuring Zookeeper
+      ZOOKEEPER_CLIENT_PORT: 2181 # Exposes Zookeeper client port 2181
+      ZOOKEEPER_TICK_TIME: 2000 # Sets tick time for session management
+    ports: # Publishes Zookeeper port to host
+      - "2181:2181" # Maps host port 2181 to container port 2181
+
+  kafka: # Defines the Kafka broker used for event streaming
+    image: confluentinc/cp-kafka:7.5.0 # Uses Confluent Platform Kafka image version 7.5.0
+    container_name: trading-kafka # Human-friendly name for Kafka broker
+    depends_on: # Ensures Kafka starts after Zookeeper is ready
+      - zookeeper # Declares dependency on the Zookeeper service
+    ports: # Publishes Kafka ports to host for local client connections
+      - "9092:9092" # Maps host port 9092 to container port 9092 for plaintext listener
+    environment: # Configures Kafka broker via environment variables
+      KAFKA_BROKER_ID: 1 # Unique broker ID required in a Kafka cluster
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181 # Points Kafka to the Zookeeper service
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT # Defines listener protocols
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092 # Advertises the broker address to clients
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1 # Sets replication factor to 1 for single-broker setup
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true' # Enables auto-creation of topics upon first use for simplicity
+    healthcheck: # Adds a simple healthcheck for Kafka broker readiness
+      test: ["CMD", "bash", "-c", "nc -z localhost 9092"] # Checks if port 9092 is open
+      interval: 10s # Executes healthcheck every 10 seconds
+      timeout: 5s # Times out a check after 5 seconds
+      retries: 10 # Marks unhealthy after 10 failures
+
+  redis: # Defines the Redis cache used by both services
+    image: redis:7 # Uses official Redis image version 7
+    container_name: trading-redis # User-friendly container name
+    ports: # Publishes Redis port for local development
+      - "6379:6379" # Maps host port 6379 to container port 6379
+    command: ["redis-server", "--save", "", "--appendonly", "no"] # Disables persistence for simplicity
+
+  trade-service: # Defines the core Trading microservice
+    build: # Builds the Docker image from the Dockerfile within the module
+      context: ./trade-service # Sets build context to the trade-service directory
+      dockerfile: Dockerfile # Uses the Dockerfile in the specified context
+    container_name: trade-service # Assigns readable container name
+    depends_on: # Ensures service starts after its dependencies are ready
+      postgres: # Depends on PostgreSQL for database connectivity
+        condition: service_healthy # Waits for healthy state
+      kafka: # Depends on Kafka for publishing events
+        condition: service_started # Waits for start (no healthcheck dependency required)
+      redis: # Depends on Redis for caching
+        condition: service_started # Waits for start (Redis has no healthcheck configured)
+    environment: # Injects environment variables overriding application defaults
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/trading # Database JDBC URL
+      SPRING_DATASOURCE_USERNAME: trading # Database username
+      SPRING_DATASOURCE_PASSWORD: trading # Database password
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092 # Kafka broker endpoint
+      MANAGEMENT_METRICS_TAGS_APPLICATION: trade-service # Adds application tag to metrics
+      SECURITY_JWT_SECRET: changemechangemechangeme # JWT signing secret; replace in production
+      SECURITY_JWT_EXPIRATION_MINUTES: "60" # JWT expiration in minutes
+      RATES_BASE_URL: http://rates-lb:8080 # Base URL for calling the rates-service via Nginx load balancer
+    ports: # Publishes service port to access APIs from host machine
+      - "8081:8081" # Maps host port 8081 to container port 8081 for trade-service
+
+  rates-service: # Defines the Rates microservice providing FX rates
+    build: # Builds the rates-service Docker image (first instance)
+      context: ./rates-service # Sets build context for Docker
+      dockerfile: Dockerfile # Uses the Dockerfile within rates-service module
+    container_name: rates-service-1 # Assigns a friendly name to the first instance
+    depends_on: # Declares dependencies that must start first
+      redis: # Depends on Redis for caching
+        condition: service_started # Waits for Redis to start
+    environment: # Sets environment variables to override defaults
+      MANAGEMENT_METRICS_TAGS_APPLICATION: rates-service # Configures application tag for metrics
+    expose: # Exposes the container port to the Docker network (not the host)
+      - "8082" # Allows other services to reach the app via Docker network
+
+  rates-service-2: # Second instance of Rates microservice for load balancing
+    build: # Builds the rates-service Docker image (second instance reuses same context)
+      context: ./rates-service # Uses same source as first instance
+      dockerfile: Dockerfile # Uses the same Dockerfile
+    container_name: rates-service-2 # Friendly name for the second instance
+    depends_on: # Ensures Redis is available first
+      redis:
+        condition: service_started
+    environment: # Sets application tag for metrics
+      MANAGEMENT_METRICS_TAGS_APPLICATION: rates-service
+    expose: # Exposes port only to the Docker network
+      - "8082"
+
+  rates-lb: # Nginx load balancer that fronts both rates-service instances
+    image: nginx:1.27 # Official Nginx image
+    container_name: rates-lb # Friendly container name
+    depends_on: # Starts after both rates-service instances are up
+      - rates-service
+      - rates-service-2
+    volumes: # Mounts custom Nginx configuration file
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro # Read-only Nginx config defining upstreams
+    ports: # Publishes the load balancer port to host for troubleshooting if needed
+      - "8080:8080" # Maps host 8080 to Nginx 8080
+
+  prometheus: # Defines Prometheus for metrics collection
+    image: prom/prometheus:v2.53.0 # Uses official Prometheus image at a specific version
+    container_name: trading-prometheus # Friendly container name
+    volumes: # Mounts configuration file into the container
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro # Read-only Prometheus config
+    command: ["--config.file=/etc/prometheus/prometheus.yml"] # Points Prometheus to the mounted config file
+    ports: # Exposes Prometheus web UI to host
+      - "9090:9090" # Maps host port 9090 to container port 9090
+
+  grafana: # Defines Grafana for dashboarding metrics
+    image: grafana/grafana:11.1.0 # Uses a stable Grafana release
+    container_name: trading-grafana # Friendly container name
+    depends_on: # Ensures Prometheus is started before Grafana
+      - prometheus # Declares dependency on Prometheus
+    environment: # Sets default admin credentials for Grafana
+      GF_SECURITY_ADMIN_USER: admin # Admin username
+      GF_SECURITY_ADMIN_PASSWORD: admin # Admin password (change in production)
+    ports: # Exposes Grafana web UI
+      - "3000:3000" # Maps host port 3000 to container port 3000
+
+volumes: # Declares named volumes for persistent data storage
+  pgdata: {} # Named volume for PostgreSQL data files; empty object uses defaults
+
