@@ -1,0 +1,16 @@
+# Prometheus configuration for scraping metrics from microservices
+
+global:
+  scrape_interval: 15s # Default interval for scraping targets
+
+scrape_configs:
+  - job_name: 'trade-service' # Logical name for the trade-service target
+    static_configs:
+      - targets: ['trade-service:8081'] # Points to trade-service within the Docker network
+    metrics_path: /actuator/prometheus # Path where Spring Boot exposes Prometheus metrics
+
+  - job_name: 'rates-service' # Logical name for the rates-service target
+    static_configs:
+      - targets: ['rates-service:8082'] # Points to rates-service within the Docker network
+    metrics_path: /actuator/prometheus # Path where Spring Boot exposes Prometheus metrics
+

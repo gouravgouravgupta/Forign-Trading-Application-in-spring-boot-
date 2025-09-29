@@ -1,0 +1,59 @@
+server: # Configures embedded web server settings
+  port: 8081 # Exposes trade-service on port 8081
+
+spring: # Top-level Spring configuration block
+  application: # Logical application identity
+    name: trade-service # Registers the service name for discovery/metrics
+  datasource: # Database connectivity settings
+    url: jdbc:postgresql://postgres:5432/trading # JDBC URL pointing to Postgres service
+    username: trading # Database username configured in docker-compose
+    password: trading # Database password configured in docker-compose
+  jpa: # JPA/Hibernate configuration
+    hibernate: # Hibernate-specific settings
+      ddl-auto: update # Auto-update schema for demo purposes (use migrations in prod)
+    properties: # Additional JPA properties
+      hibernate:
+        format_sql: true # Pretty prints SQL for readability
+        jdbc:
+          time_zone: UTC # Ensures timestamps are stored in UTC
+    open-in-view: false # Disables Open Session in View for better performance
+  kafka: # Kafka producer/consumer configuration
+    bootstrap-servers: kafka:9092 # Points to Kafka broker defined in docker-compose
+    consumer:
+      group-id: trade-service # Consumer group identifier
+      auto-offset-reset: earliest # Starts at earliest for demo reliability
+    template:
+      default-topic: trade.events # Default topic for events
+  cache: # Cache configuration
+    type: redis # Uses Redis as the backing cache store
+  data:
+    redis: # Redis connection settings
+      host: redis # Host name matching docker-compose service
+      port: 6379 # Default Redis port
+
+management: # Spring Boot Actuator and Micrometer configuration
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics # Exposes key endpoints over HTTP
+  metrics:
+    tags:
+      application: ${spring.application.name} # Adds app tag to all metrics
+
+security: # Application-specific security settings
+  jwt:
+    secret: changemechangemechangeme # Symmetric signing key for JWT (override in prod)
+    expiration-minutes: 60 # Token validity period
+
+rates: # Configuration for rates load-balanced endpoint
+  base-url: http://rates-lb:8080 # Points to Nginx load balancer fronting multiple rates-service instances
+
+resilience4j: # Circuit breaker configurations
+  circuitbreaker:
+    instances:
+      ratesClient:
+        slidingWindowSize: 10
+        failureRateThreshold: 50
+        waitDurationInOpenState: 15s
+        permittedNumberOfCallsInHalfOpenState: 3
+
