@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "Gourav Gupta Portfolio",
+    "slug": "portfolio-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0a1428"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.gouravgupta.portfolio"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0a1428"
+      },
+      "package": "com.gouravgupta.portfolio"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    }
+  }
+}
