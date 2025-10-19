@@ -1,0 +1,11 @@
+{
+  "name": "Gourav Gupta",
+  "title": "Web and Mobile Application Developer",
+  "email": "gouravgouravgupta@gmail.com",
+  "github": "https://github.com/gouravgouravgupta",
+  "summary": "Developer of professional apps with animations and 3D.",
+  "experience": [
+    { "company": "Example Corp", "role": "Senior Software Engineer", "period": "2022 — Present" },
+    { "company": "FinTech Startup", "role": "Software Engineer", "period": "2020 — 2022" }
+  ]
+}

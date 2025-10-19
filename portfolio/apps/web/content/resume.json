@@ -1,0 +1,26 @@
+{
+  "name": "Gourav Gupta",
+  "title": "Web and Mobile Application Developer",
+  "location": "India",
+  "email": "gouravgouravgupta@gmail.com",
+  "github": "https://github.com/gouravgouravgupta",
+  "linkedin": "",
+  "summary": "Full-stack developer specializing in modern web and cross-platform mobile apps.",
+  "skills": ["Next.js", "React", "Expo", "React Native", "TypeScript", "Three.js", "Java", "Spring"],
+  "experience": [
+    {
+      "company": "Example Corp",
+      "role": "Senior Software Engineer",
+      "period": "2022 — Present",
+      "summary": "Lead development of scalable web and mobile applications.",
+      "technologies": ["Next.js", "React Native", "TypeScript", "AWS"]
+    },
+    {
+      "company": "FinTech Startup",
+      "role": "Software Engineer",
+      "period": "2020 — 2022",
+      "summary": "Built event-driven microservices and performant web UIs.",
+      "technologies": ["Java", "Spring Boot", "Kafka", "Redis"]
+    }
+  ]
+}
